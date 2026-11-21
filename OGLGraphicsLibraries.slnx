@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="assets/assets.csproj" />
+  <Project Path="OGLGraphicsLibraries.csproj" />
+</Solution>
