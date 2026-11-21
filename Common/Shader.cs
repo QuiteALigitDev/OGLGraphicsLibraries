@@ -32,7 +32,7 @@ namespace OpenGLEngine.Common{
         {
             s.Use();
             // Transform OBJ Verts from vertex Coordinantes to world space
-            Matrix4 model = Matrix4.CreateRotationX((float)MathHelper.DegreesToRadians(-55.0f));
+            Matrix4 model = Matrix4.CreateRotationX((float)MathHelper.DegreesToRadians(0.0f));
             // world space to view matrix
             Matrix4 view = Matrix4.LookAt(
                 new Vector3(0.0f, 0.0f, 3.0f),

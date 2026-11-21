@@ -20,8 +20,8 @@ namespace OpenGLEngine{
 
         public float scale = 1.0f;
 
-        public string modelPath = "assets/watermill.obj";
-        public string texturePath = "assets/watermill_diffuse.png";
+        public string modelPath = null!;
+        public string texturePath = null!;
         public string FragmentShaderPath = null!;
         public string VertexShaderPath = null!;
 
@@ -34,10 +34,12 @@ namespace OpenGLEngine{
         public override void Start()
         {
 
-            if (texturePath == null &&modelPath == null && VertexShaderPath == null && FragmentShaderPath == null) { return; }
-            if (VertexShaderPath != null && FragmentShaderPath != null)
+            if (texturePath == null && modelPath == null) { return; }
+            if (texturePath == "" && modelPath == "") { return; }
+
+            if (VertexShaderPath != null && FragmentShaderPath != null & VertexShaderPath != "" && FragmentShaderPath != "")
             {
-                var shdr = new Shader(VertexShaderPath, FragmentShaderPath);
+                var shdr = new Shader(VertexShaderPath, FragmentShaderPath!);
                 ShaderManager.initShader(shdr);
 
                 model = new Model(modelPath!, texturePath!, shdr);

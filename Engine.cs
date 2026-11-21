@@ -70,6 +70,7 @@ namespace OpenGLEngine
         float fps;
 
         Vector3 ViewportPos;
+        bool ViewportSelected;
 
         float pitch = 0;
         float yaw = 0;
@@ -84,83 +85,89 @@ namespace OpenGLEngine
             {
                 Close();
             }
+            
 
             if (TimeKeeper.IsRunning) {
                 ComponentManager.UpdateAll(); 
             } 
-            else 
+            else
             {
+            
+                ComponentManager.SceneUpdate();
 
-                ComponentManager.SceneUpdate(); 
+                if (ViewportSelected)
+                {
+                    Vector3 up = Vector3.UnitY;
+                    Vector3 front = new Vector3(0.0f, 0.0f, -1.0f);
+                    Vector3 cameraTarget = Vector3.Zero;
+                    Vector3 cameraDirection = Vector3.Normalize( - cameraTarget);
+                    Vector3 cameraRight = Vector3.Normalize(Vector3.Cross(up, cameraDirection));
+                    Vector3 cameraUp = Vector3.Cross(cameraDirection, cameraRight);
 
-                Vector3 up = Vector3.UnitY;
-                Vector3 front = new Vector3(0.0f, 0.0f, -1.0f);
-                Vector3 cameraTarget = Vector3.Zero;
-                Vector3 cameraDirection = Vector3.Normalize( - cameraTarget);
-                Vector3 cameraRight = Vector3.Normalize(Vector3.Cross(up, cameraDirection));
-                Vector3 cameraUp = Vector3.Cross(cameraDirection, cameraRight);
+                    if (Input.IsMouseDown(MouseButton.Button1)){               
+                        mouseDragging = true; 
+                        Input.SetCursorShape(MouseCursor.PointingHand);
 
-                if (Input.IsMouseDown(MouseButton.Button1)){               
-                    mouseDragging = true; 
-                    Input.SetCursorShape(MouseCursor.PointingHand);
+                        yaw += Input.MouseDelta.X * Sensitivity;
+                        pitch -= Input.MouseDelta.Y * Sensitivity;
 
-                    yaw += Input.MouseDelta.X * Sensitivity;
-                    pitch -= Input.MouseDelta.Y * Sensitivity;
-
-                    if (pitch > 89.0f)
-                    {
-                        pitch = 89.0f;
+                        if (pitch > 89.0f)
+                        {
+                            pitch = 89.0f;
+                        }
+                        else if (pitch < -89.0f)
+                        {
+                            pitch = -89.0f;
+                        }
                     }
-                    else if (pitch < -89.0f)
+                    else if (mouseDragging)
                     {
-                        pitch = -89.0f;
+                        Input.SetCursorShape(MouseCursor.Default);
+                        mouseDragging = false;
                     }
-                }
-                else if (mouseDragging)
-                {
-                    Input.SetCursorShape(MouseCursor.Default);
-                    mouseDragging = false;
-                }
 
-                if (Input.PrevScroll.X > Input.Scroll.X && Input.PrevScroll.Y > Input.Scroll.Y)
-                {
-                    ViewportPos += front * (5.5f * (float)TimeKeeper.time);
-                }
-                else
-                {
-                    ViewportPos -= front * (5.5f * (float)TimeKeeper.time);
-                }
+                    front.X =
+                        (float)Math.Cos(MathHelper.DegreesToRadians(pitch))
+                        * (float)Math.Cos(MathHelper.DegreesToRadians(yaw));
+                    front.Y = (float)Math.Sin(MathHelper.DegreesToRadians(pitch));
+                    front.Z =
+                        (float)Math.Cos(MathHelper.DegreesToRadians(pitch))
+                        * (float)Math.Sin(MathHelper.DegreesToRadians(yaw));
+                    front = Vector3.Normalize(front);
 
-                if (KeyboardState.IsKeyDown(Keys.D0))
-                {
-                    try {
-                        MainCamera? cam = ComponentManager.GetGameobjectByName("Camera")!.GetComponent<MainCamera>();
-                        pitch = cam!.pitch;
-                        yaw = cam!.yaw;
-                        ViewportPos = ComponentManager.GetParentGameObject(cam)!.position;
-                    } 
-                    catch{ Console.WriteLine("No Main Camera In Scene! You Must Have a GameObject Named 'Camera'."); }
+                    if (Input.PrevScroll.Y > Input.Scroll.Y)
+                    {
+                        ViewportPos -= front * (35.5f * (float)TimeKeeper.time);
+                    }
+                    else if (Input.PrevScroll.Y < Input.Scroll.Y)
+                    {
+                        ViewportPos += front * (35.5f * (float)TimeKeeper.time);
+                    }
+
+                    if (KeyboardState.IsKeyDown(Keys.D0))
+                    {
+                        try {
+                            MainCamera? cam = ComponentManager.GetGameobjectByName("Camera")!.GetComponent<MainCamera>();
+                            pitch = cam!.pitch;
+                            yaw = cam!.yaw;
+                            ViewportPos = ComponentManager.GetParentGameObject(cam)!.position;
+                        } 
+                        catch{ Console.WriteLine("No Main Camera In Scene! You Must Have a GameObject Named 'Camera'."); }
+                    }
+
+                    //Console.WriteLine(position);
+                    Matrix4 view = Matrix4.LookAt(ViewportPos, ViewportPos + front, up);
+                    //ShaderManager.numOfShaders();
+                    ShaderManager.SetMat4ofAllShaders(view, "view");
                 }
-
-                front.X =
-                    (float)Math.Cos(MathHelper.DegreesToRadians(pitch))
-                    * (float)Math.Cos(MathHelper.DegreesToRadians(yaw));
-                front.Y = (float)Math.Sin(MathHelper.DegreesToRadians(pitch));
-                front.Z =
-                    (float)Math.Cos(MathHelper.DegreesToRadians(pitch))
-                    * (float)Math.Sin(MathHelper.DegreesToRadians(yaw));
-                front = Vector3.Normalize(front);
-
-                //Console.WriteLine(position);
-                Matrix4 view = Matrix4.LookAt(ViewportPos, ViewportPos + front, up);
-                //ShaderManager.numOfShaders();
-                ShaderManager.SetMat4ofAllShaders(view, "view");
             }
         }
 
         public void LoadScene(string scene)
         {
             ComponentManager.ClearComponents();
+
+            CurScene = scene;
 
             using JsonDocument document = JsonDocument.Parse(File.ReadAllText("EngineJson.json"));
             var root = document.RootElement;
@@ -220,12 +227,6 @@ namespace OpenGLEngine
             ScriptHost.Compile("assets");
 
             LoadScene(CurScene);
-
-            var options = new JsonSerializerOptions 
-            { 
-                WriteIndented = true,
-                IncludeFields = true // Required so ValueTuple (int, int) saves Item1 and Item2
-            };
 
             // Background Color when we run GL.Clear() in OnRenderFrame.
             GL.ClearColor(0.1059f, 0.1059f, 0.1059f, 1.0f);
@@ -318,12 +319,6 @@ namespace OpenGLEngine
             ImGui.StyleColorsDark();
 
             ImGuiStylePtr style = ImGui.GetStyle();
-            if ((io.ConfigFlags & ImGuiConfigFlags.ViewportsEnable) != 0)
-            {
-                style.ScaleAllSizes(1.0f);
-                style.WindowRounding = 0.0f;
-                style.Colors[(int)ImGuiCol.WindowBg].W = 1.0f;
-            }
 
             ImguiImplOpenTK4.Init(this);
             ImguiImplOpenGL3.Init();
@@ -335,7 +330,7 @@ namespace OpenGLEngine
             ShaderManager.SendNativeRefs(this);
             ShaderManager.createGlobalShader();
 
-            //ComponentManager.StartAll();
+            ComponentManager.SceneStart();
         }
         // This runs everytime we render a frame.
         protected override void OnRenderFrame(FrameEventArgs e)
@@ -353,6 +348,8 @@ namespace OpenGLEngine
             BaseUI();
 
             ImGui.Begin("Viewport");
+
+            ViewportSelected = ImGui.IsWindowFocused();
 
             var obj = ComponentManager.components;
 
@@ -457,8 +454,8 @@ namespace OpenGLEngine
             screenShader?.SetFloat("time", (float)TimeKeeper.time);
             GL.ActiveTexture(TextureUnit.Texture0);
             GL.BindTexture(TextureTarget.Texture2D, renderedTexture);
-            // GL.BindVertexArray(quadVAO);
-            // GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
+            GL.BindVertexArray(quadVAO);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, 6);
             
             // ImGUI part 2 
             ImguiImplOpenGL3.RenderDrawData(ImGui.GetDrawData());
@@ -505,12 +502,6 @@ namespace OpenGLEngine
             base.OnUnload();
             File.WriteAllText("EngineJson.json", rootNode?.ToJsonString() ?? "");
 
-            var options = new JsonSerializerOptions 
-            { 
-                WriteIndented = true,
-                IncludeFields = true
-            };
-
             ImguiImplOpenGL3.Shutdown();
             ImguiImplOpenTK4.Shutdown();
 
@@ -522,7 +513,7 @@ namespace OpenGLEngine
         // UI
 
         int selectedindex = 0;
-        float maxFPS = 60.0f;
+        float maxFPS = 0.0f;
         readonly Queue<float> recentFPS = new(800);
 
         // Assets
@@ -537,10 +528,10 @@ namespace OpenGLEngine
             // File Browser
             ImGui.Begin("Assets");
 
-            if (!checkedFolder){ files = Directory.GetFiles(path); dirs = Directory.GetDirectories(path); }
+            if (!checkedFolder){ files = Directory.GetFiles(path); dirs = Directory.GetDirectories(path); checkedFolder = true; }
             Console.WriteLine();
 
-            if(ImGui.Button("Back")){ try {path = Directory.GetParent(path).FullName;} catch { Console.WriteLine("Cannot Go Back! No further Directories"); } }
+            if(ImGui.Button("Back")){ try {checkedFolder = false; path = Directory.GetParent(path).FullName;} catch { Console.WriteLine("Cannot Go Back! No further Directories"); } }
 
             if ((files.Length + dirs.Length) != 0)
             {
@@ -549,6 +540,7 @@ namespace OpenGLEngine
                     var dir = new DirectoryInfo(d).Name;
                     if(ImGui.Selectable($"\uea83 {dir}"))
                     {
+                        checkedFolder = false;
                         path += $"/{dir}";
                     }
                 }
@@ -590,12 +582,18 @@ namespace OpenGLEngine
                     ImGui.TableSetupColumn("Output...");
                     ImGui.TableHeadersRow();
 
-                    foreach (var i in items)
+                    Array.Reverse(items);
+                    for (int i = 0; i < items.Length; i++)
                     {
+                        if (i > 1000)
+                        {
+                            continue;
+                        }
+
                         ImGui.TableNextRow();
 
                         ImGui.TableSetColumnIndex(0);
-                        ImGui.Text(i);
+                        ImGui.Text(items[i]);
                     }
                     ImGui.EndTable();
                 }
@@ -616,7 +614,7 @@ namespace OpenGLEngine
                 if (currentTime - lastTime >= 1.0){
                     fps = nbFrames / (float)(currentTime - lastTime);
                     nbFrames = 0;
-                    lastTime += 1.0;
+                    lastTime = currentTime;
                     newFpsSample = true;
                 }   
             }
@@ -793,13 +791,13 @@ namespace OpenGLEngine
             bool IsReadOnly = field.IsLiteral || field.IsInitOnly;
 
             bool isDisabled = false;
-            if (field.IsDefined(typeof(DisableAttribute), inherit: true)) {isDisabled = true; ImGui.BeginDisabled();}
+            if (field.IsDefined(typeof(DisableAttribute), inherit: true)) {ImGui.BeginDisabled(); isDisabled = true;}
 
-            if (field.IsDefined(typeof(HideAttribute), inherit: true)) {return;}
+            if (field.IsDefined(typeof(HideAttribute), inherit: true) && !isDisabled) {return;}
 
-            if (field.IsDefined(typeof(HeaderAttribute), inherit : true)) {ImGui.SeparatorText($"{field.GetCustomAttribute<HeaderAttribute>()!.Header}##{selC.GetType().Name}"); return; }
+            if (field.IsDefined(typeof(HeaderAttribute), inherit : true) && !isDisabled) {ImGui.SeparatorText($"{field.GetCustomAttribute<HeaderAttribute>()!.Header}##{selC.GetType().Name}"); }
 
-            if (field.IsDefined(typeof(DescriptionAttribute), inherit : true)) {ImGui.TextWrapped($"{field.GetCustomAttribute<DescriptionAttribute>()!.Description}##{selC.GetType().Name}"); return; }
+            if (field.IsDefined(typeof(DescriptionAttribute), inherit : true) && isDisabled) {ImGui.TextWrapped($"{field.GetCustomAttribute<DescriptionAttribute>()!.Description}"); }
 
             if (value == null && field.FieldType == typeof(string)){
                 value = "";}

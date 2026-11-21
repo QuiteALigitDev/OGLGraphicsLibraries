@@ -65,7 +65,7 @@ namespace OpenGLEngine.Common
             started = true;
 
             foreach (var c in components){
-                c.Draw();
+                c.Start();
                 foreach (var child in c.childComponents)
                     child.Start();
             }
@@ -74,7 +74,7 @@ namespace OpenGLEngine.Common
         public static void UpdateAll()
         {
             foreach (var c in components){
-                c.Draw();
+                c.Update();
                 foreach (var child in c.childComponents)
                     child.Update();
             }

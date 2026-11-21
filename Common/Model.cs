@@ -163,80 +163,86 @@ namespace OpenGLEngine.Common
         // Model Loading
         public static (float[] vertices, uint[] indices) ParseOBJ(string path)
         {
-            ObjFile objFile = ObjFile.FromFile(path);
+            try{
+                ObjFile objFile = ObjFile.FromFile(path);
 
-            List<float> finalVertices = new List<float>();
-            List<uint> finalIndices = new List<uint>();
+                List<float> finalVertices = new List<float>();
+                List<uint> finalIndices = new List<uint>();
 
-            // Maps "vertexIndex/textureIndex" -> flattened index, so repeated
-            // combinations get reused instead of duplicated.
-            Dictionary<(int, int, int), uint> vertexLookup =
-                new Dictionary<(int, int, int), uint>();
+                // Maps "vertexIndex/textureIndex" -> flattened index, so repeated
+                // combinations get reused instead of duplicated.
+                Dictionary<(int, int, int), uint> vertexLookup =
+                    new Dictionary<(int, int, int), uint>();
 
-            foreach (ObjFace face in objFile.Faces)
-            {
-                List<uint> faceIndices = new List<uint>();
-
-                foreach (ObjTriplet point in face.Vertices)
+                foreach (ObjFace face in objFile.Faces)
                 {
-                    // Library indices are already 1-based-converted; still need -1 for 0-based C# lists.
-                    int vertexIndex = point.Vertex - 1;
-                    int textureIndex = point.Texture - 1;
-                    int normalIndex = point.Normal - 1;
+                    List<uint> faceIndices = new List<uint>();
 
-                    var key = (vertexIndex, textureIndex, normalIndex);
-
-                    if (!vertexLookup.TryGetValue(key, out uint flattenedIndex))
+                    foreach (ObjTriplet point in face.Vertices)
                     {
-                        ObjVertex v = objFile.Vertices[vertexIndex];
-                        finalVertices.Add(v.Position.X);
-                        finalVertices.Add(v.Position.Y);
-                        finalVertices.Add(v.Position.Z);
+                        // Library indices are already 1-based-converted; still need -1 for 0-based C# lists.
+                        int vertexIndex = point.Vertex - 1;
+                        int textureIndex = point.Texture - 1;
+                        int normalIndex = point.Normal - 1;
 
-                        if (textureIndex >= 0)
+                        var key = (vertexIndex, textureIndex, normalIndex);
+
+                        if (!vertexLookup.TryGetValue(key, out uint flattenedIndex))
                         {
-                            ObjVector3 uv = objFile.TextureVertices[textureIndex];
-                            finalVertices.Add(uv.X);
-                            finalVertices.Add(uv.Y);
-                        }
-                        else
-                        {
-                            // No UV data for this face/vertex — fall back to 0,0.
-                            finalVertices.Add(0f);
-                            finalVertices.Add(0f);
+                            ObjVertex v = objFile.Vertices[vertexIndex];
+                            finalVertices.Add(v.Position.X);
+                            finalVertices.Add(v.Position.Y);
+                            finalVertices.Add(v.Position.Z);
+
+                            if (textureIndex >= 0)
+                            {
+                                ObjVector3 uv = objFile.TextureVertices[textureIndex];
+                                finalVertices.Add(uv.X);
+                                finalVertices.Add(uv.Y);
+                            }
+                            else
+                            {
+                                // No UV data for this face/vertex — fall back to 0,0.
+                                finalVertices.Add(0f);
+                                finalVertices.Add(0f);
+                            }
+
+                            if (normalIndex >= 0)
+                            {
+                                ObjVector3 normal = objFile.VertexNormals[normalIndex];
+                                finalVertices.Add(normal.X);
+                                finalVertices.Add(normal.Y);
+                                finalVertices.Add(normal.Z);
+                            }
+                            else
+                            {
+                                finalVertices.Add(0f);
+                                finalVertices.Add(0f);
+                                finalVertices.Add(0f);
+                            }
+
+                            flattenedIndex = (uint)(finalVertices.Count / 8 - 1);
+                            vertexLookup[key] = flattenedIndex;
                         }
 
-                        if (normalIndex >= 0)
-                        {
-                            ObjVector3 normal = objFile.VertexNormals[normalIndex];
-                            finalVertices.Add(normal.X);
-                            finalVertices.Add(normal.Y);
-                            finalVertices.Add(normal.Z);
-                        }
-                        else
-                        {
-                            finalVertices.Add(0f);
-                            finalVertices.Add(0f);
-                            finalVertices.Add(0f);
-                        }
-
-                        flattenedIndex = (uint)(finalVertices.Count / 8 - 1);
-                        vertexLookup[key] = flattenedIndex;
+                        faceIndices.Add(flattenedIndex);
                     }
 
-                    faceIndices.Add(flattenedIndex);
+                    // Fan-triangulate in case of quads/n-gons.
+                    for (int i = 1; i < faceIndices.Count - 1; i++)
+                    {
+                        finalIndices.Add(faceIndices[0]);
+                        finalIndices.Add(faceIndices[i]);
+                        finalIndices.Add(faceIndices[i + 1]);
+                    }
                 }
 
-                // Fan-triangulate in case of quads/n-gons.
-                for (int i = 1; i < faceIndices.Count - 1; i++)
-                {
-                    finalIndices.Add(faceIndices[0]);
-                    finalIndices.Add(faceIndices[i]);
-                    finalIndices.Add(faceIndices[i + 1]);
-                }
+                return (finalVertices.ToArray(), finalIndices.ToArray());
             }
-
-            return (finalVertices.ToArray(), finalIndices.ToArray());
+            catch
+            {
+                throw new FileNotFoundException("File missing.", path);
+            }
         }
 
         // Model Disposal
